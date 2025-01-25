@@ -55,7 +55,7 @@ def get_next_code():
     if result and result[0]:
         return result[0] + 1
     else:
-        return 100001  # Start from 100001 if no users exist yet
+        return 1910001  # Start from 100001 if no users exist yet
 
 # Insert user data into database
 def insert_user_data(user_id, username, code):
@@ -111,6 +111,7 @@ def get_game_id(message):
     game_id = message.text  # Store user-provided game ID
 
     bot.send_message(message.chat.id, "👾 Bot sedang scan winrate, sila tunggu sebentar...")
+    time.sleep(20)  # Simulate injection delay
     request_queue.put((send_winrate, message))
 
 # Generate and send winrate message
@@ -164,12 +165,10 @@ def callback_query_handler(call):
         # Toggle option status
         if selected_option in user_active_options.get(user_id, set()):
             user_active_options[user_id].remove(selected_option)
-            bot.answer_callback_query(call.id, f"{selected_option.replace('_', ' ').title()} dinyahaktifkan.")
         else:
             user_active_options.setdefault(user_id, set()).add(selected_option)
-            bot.answer_callback_query(call.id, f"{selected_option.replace('_', ' ').title()} diaktifkan.")
 
-        # Update the inline keyboard
+        # Immediately update the inline keyboard without additional notifications
         bot.edit_message_reply_markup(
             chat_id=user_id,
             message_id=call.message.message_id,
@@ -196,7 +195,7 @@ def get_updated_inline_keyboard(chat_id):
 
 # Simulate injection process
 def simulate_injection(user_id):
-    time.sleep(10)  # Simulate injection delay
+    time.sleep(20)  # Simulate injection delay
     bot.send_message(user_id, "🧧 Injection completed! Semoga kemenangan milik anda. 🧧")
 
 # Worker thread for processing requests
