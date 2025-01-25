@@ -3,7 +3,9 @@ from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 import time
 import configparser
 import random
-import json  # Import JSON untuk simpan special code dan user ID
+import sqlite3
+from queue import Queue
+import threading
 
 # Load config
 config = configparser.ConfigParser()
@@ -13,6 +15,24 @@ BOT_TOKEN = config["BOT"]["TOKEN"]  # Telegram bot token
 # Initialize bot
 bot = telebot.TeleBot(BOT_TOKEN)
 
+# Connect to SQLite database
+db_connection = sqlite3.connect("luckyinjector.db", check_same_thread=False)
+db_cursor = db_connection.cursor()
+
+# Drop and recreate the user table with the updated structure
+# db_cursor.execute('DROP TABLE IF EXISTS user')
+
+db_cursor.execute('''
+CREATE TABLE IF NOT EXISTS user (
+    user_id INTEGER PRIMARY KEY,
+    username TEXT,
+    code INTEGER UNIQUE,
+    latest_inject TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    date_created TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+)
+''')
+db_connection.commit()
+
 # Read game list from file
 with open("game.txt", "r") as file:
     games = [line.strip() for line in file.readlines()]
@@ -20,36 +40,54 @@ with open("game.txt", "r") as file:
 # Store active options for each user
 user_active_options = {}
 
-# Check if special code is valid and bind it to user ID
-def is_code_valid(entered_code, user_id):
-    try:
-        with open("userkey.json", "r") as file:
-            codes = json.load(file)
-        # Check if the code exists and matches the user ID
-        if entered_code in codes and codes[entered_code] == str(user_id):
-            return True
-        return False
-    except FileNotFoundError:
-        return False
+# Request queue
+request_queue = Queue()
 
-# Assign code to user in the file
-def assign_code_to_user(entered_code, user_id):
-    try:
-        with open("userkey.json", "r") as file:
-            codes = json.load(file)
-    except FileNotFoundError:
-        codes = {}
+# Check if user exists in database
+def is_user_exist(user_id):
+    db_cursor.execute('SELECT user_id FROM user WHERE user_id = ?', (user_id,))
+    return db_cursor.fetchone() is not None
 
-    # Check if the code already exists
-    if entered_code not in codes:
-        codes[entered_code] = str(user_id)
-        # Save the updated data back to file
-        with open("userkey.json", "w") as file:
-            json.dump(codes, file, indent=4)
+# Get the next available code from the database
+def get_next_code():
+    db_cursor.execute('SELECT MAX(code) FROM user')
+    result = db_cursor.fetchone()
+    if result and result[0]:
+        return result[0] + 1
+    else:
+        return 100001  # Start from 100001 if no users exist yet
+
+# Insert user data into database
+def insert_user_data(user_id, username, code):
+    db_cursor.execute('''
+    INSERT INTO user (user_id, username, code)
+    VALUES (?, ?, ?)
+    ''', (user_id, username, code))
+    db_connection.commit()
+
+# Update the latest_inject timestamp
+def update_latest_inject(user_id):
+    db_cursor.execute('''
+    UPDATE user SET latest_inject = CURRENT_TIMESTAMP WHERE user_id = ?
+    ''', (user_id,))
+    db_connection.commit()
 
 # Command: /start
 @bot.message_handler(commands=['start'])
 def start_handler(message):
+    user_id = message.chat.id
+    username = message.chat.username if message.chat.username else None
+
+    # Check if user already exists in the database
+    if not is_user_exist(user_id):
+        # Generate unique code
+        code = get_next_code()
+        # Insert user data with the generated code
+        insert_user_data(user_id, username, code)
+    else:
+        # Update latest_inject timestamp for existing user
+        update_latest_inject(user_id)
+
     # Prompt user to input the special code
     bot.send_message(message.chat.id, "💎 Selamat datang! Sila masukkan Special Code untuk verify.")
     bot.register_next_step_handler(message, verify_code)
@@ -58,13 +96,22 @@ def verify_code(message):
     user_id = message.chat.id
     entered_code = message.text
 
-    # Check if the entered code is valid and bound to the user ID
-    if is_code_valid(entered_code, user_id):
-        bot.send_message(message.chat.id, "🗝️ Verification berjaya! Sila tunggu, 👾 Bot sedang scan winrate...")
-        time.sleep(2)  # Simulate scanning delay
-        send_winrate(message)
+    # Check if the entered code matches the user's code in the database
+    db_cursor.execute('SELECT code FROM user WHERE user_id = ?', (user_id,))
+    result = db_cursor.fetchone()
+
+    if result and str(result[0]) == entered_code:
+        bot.send_message(message.chat.id, "🗝️ Verification berjaya! Sila masukkan ID game anda.")
+        bot.register_next_step_handler(message, get_game_id)
     else:
         bot.send_message(message.chat.id, "❌ Code Tidak Sah. Sila chat admin @xninze101 untuk membeli Activation Code. \n\nSila tekan /help untuk bantuan.")
+
+def get_game_id(message):
+    user_id = message.chat.id
+    game_id = message.text  # Store user-provided game ID
+
+    bot.send_message(message.chat.id, "👾 Bot sedang scan winrate, sila tunggu sebentar...")
+    request_queue.put((send_winrate, message))
 
 # Generate and send winrate message
 def send_winrate(message):
@@ -76,12 +123,6 @@ def send_winrate(message):
 
     # Send the winrate results
     bot.send_message(message.chat.id, winrate_message, parse_mode="Markdown")
-    bot.send_message(message.chat.id, "Sila masukkan ID game anda:")
-    bot.register_next_step_handler(message, get_game_id)
-
-def get_game_id(message):
-    user_id = message.chat.id  # Store user-provided game ID
-    # Send inline keyboard for options
     send_option_inline_keyboard(message.chat.id)
 
 # Send the main menu with inline buttons
@@ -89,16 +130,17 @@ def send_option_inline_keyboard(chat_id):
     # Create inline keyboard
     markup = InlineKeyboardMarkup(row_width=2)
     options = [
-        ("INJECTOR PECAH 3", "injector_pecah_3"),
-        ("SEAWORLD BIGWIN INJECTOR", "seaworld_bigwin"),
-        ("DETECTOR FREESPIN", "detector_freespin"),
-        ("WINRATE 99%", "winrate_99"),
-        ("MEGA ULTRA BIGWIN INJECTOR", "mega_ultra_bigwin"),
+        ("SEAWORLD BIGWIN 🔴", "seaworld_bigwin"),
+        ("PECAH 3 🔴", "injector_pecah_3"),
+        ("MEGA ULTRA BIGWIN 🔴", "mega_ultra_bigwin"),
+        ("DETECTOR FREESPIN 🔴", "detector_freespin"),
     ]
-    for label, callback_data in options:
-        markup.add(InlineKeyboardButton(label, callback_data=callback_data))
-    
-    # Add a start inject button
+    for i in range(0, len(options), 2):
+        row = options[i:i + 2]
+        buttons = [InlineKeyboardButton(label, callback_data=callback_data) for label, callback_data in row]
+        markup.row(*buttons)
+
+    # Add a start inject button centered below
     markup.add(InlineKeyboardButton("💉 Start Inject 💉", callback_data="start_inject"))
 
     # Send message with inline keyboard
@@ -117,8 +159,7 @@ def callback_query_handler(call):
         
         # Start the injection process
         bot.send_message(user_id, "💉 Start Injecting...")
-        time.sleep(3)  # Simulate injection delay
-        bot.send_message(user_id, "Injection completed! Semoga kemenangan milik anda. ✨")
+        threading.Thread(target=request_queue.put, args=((simulate_injection, user_id),)).start()
     else:
         # Toggle option status
         if selected_option in user_active_options.get(user_id, set()):
@@ -139,17 +180,35 @@ def callback_query_handler(call):
 def get_updated_inline_keyboard(chat_id):
     markup = InlineKeyboardMarkup(row_width=2)
     options = [
-        ("INJECTOR PECAH 3", "injector_pecah_3"),
-        ("SEAWORLD BIGWIN INJECTOR", "seaworld_bigwin"),
+        ("SEAWORLD BIGWIN", "seaworld_bigwin"),
+        ("PECAH 3", "injector_pecah_3"),
+        ("MEGA ULTRA BIGWIN", "mega_ultra_bigwin"),
         ("DETECTOR FREESPIN", "detector_freespin"),
-        ("WINRATE 99%", "winrate_99"),
-        ("MEGA ULTRA BIGWIN INJECTOR", "mega_ultra_bigwin"),
     ]
-    for label, callback_data in options:
-        status = "🟢" if callback_data in user_active_options.get(chat_id, set()) else "🔴"
-        markup.add(InlineKeyboardButton(f"{label} {status}", callback_data=callback_data))
+    for i in range(0, len(options), 2):
+        row = options[i:i + 2]
+        buttons = [InlineKeyboardButton(f"{label} {'🟢' if callback_data in user_active_options.get(chat_id, set()) else '🔴'}", callback_data=callback_data) for label, callback_data in row]
+        markup.row(*buttons)
+
+    # Add a start inject button centered below
     markup.add(InlineKeyboardButton("💉 Start Inject 💉", callback_data="start_inject"))
     return markup
+
+# Simulate injection process
+def simulate_injection(user_id):
+    time.sleep(10)  # Simulate injection delay
+    bot.send_message(user_id, "🧧 Injection completed! Semoga kemenangan milik anda. 🧧")
+
+# Worker thread for processing requests
+def worker():
+    while True:
+        func, arg = request_queue.get()
+        func(arg)
+        request_queue.task_done()
+
+# Start worker threads
+for _ in range(5):  # Adjust number of workers as needed
+    threading.Thread(target=worker, daemon=True).start()
 
 # Command: /help
 @bot.message_handler(commands=['help'])
