@@ -1,6 +1,5 @@
 import telebot
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
-# from telebot.types import ReplyKeyboardMarkup, KeyboardButton
 import time
 import configparser
 import random
@@ -71,7 +70,7 @@ def verify_code(message):
 def send_winrate(message):
     winrate_message = "📊 *Winrate Scanning Result* 📊\n\n"
     for game in games:
-        # Generate random winrate between 75% and 93%
+        # Generate random winrate between 40% and 93%
         winrate = f"-🤖 {game} - {random.randint(40, 93)}%"
         winrate_message += f"{winrate}\n"
 
@@ -82,10 +81,10 @@ def send_winrate(message):
 
 def get_game_id(message):
     user_id = message.chat.id  # Store user-provided game ID
-    # Create reply keyboard for options
-    send_option_keyboard(message.chat.id)
+    # Send inline keyboard for options
+    send_option_inline_keyboard(message.chat.id)
 
-# Function to send the main menu with inline buttons
+# Send the main menu with inline buttons
 def send_option_inline_keyboard(chat_id):
     # Create inline keyboard
     markup = InlineKeyboardMarkup(row_width=2)
@@ -169,7 +168,6 @@ def help_handler(message):
         "🚀 Semoga kemenangan buat anda."
     )
     bot.send_message(message.chat.id, help_message, parse_mode="Markdown")
-
 
 if __name__ == "__main__":
     print("Bot is running...")
