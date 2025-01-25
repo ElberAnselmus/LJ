@@ -1,5 +1,6 @@
 import telebot
-from telebot.types import ReplyKeyboardMarkup, KeyboardButton
+from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
+# from telebot.types import ReplyKeyboardMarkup, KeyboardButton
 import time
 import configparser
 import random
@@ -84,30 +85,33 @@ def get_game_id(message):
     # Create reply keyboard for options
     send_option_keyboard(message.chat.id)
 
-def send_option_keyboard(chat_id):
-    # Create keyboard with status indicators
-    markup = ReplyKeyboardMarkup(resize_keyboard=True)
+# Function to send the main menu with inline buttons
+def send_option_inline_keyboard(chat_id):
+    # Create inline keyboard
+    markup = InlineKeyboardMarkup(row_width=2)
     options = [
-        "INJECTOR PECAH 3",
-        "SEAWORLD BIGWIN INJECTOR",
-        "DETECTOR FREESPIN",
-        "WINRATE 99%",
-        "MEGA ULTRA BIGWIN INJECTOR"
+        ("INJECTOR PECAH 3", "injector_pecah_3"),
+        ("SEAWORLD BIGWIN INJECTOR", "seaworld_bigwin"),
+        ("DETECTOR FREESPIN", "detector_freespin"),
+        ("WINRATE 99%", "winrate_99"),
+        ("MEGA ULTRA BIGWIN INJECTOR", "mega_ultra_bigwin"),
     ]
-    for option in options:
-        status = " 🟢" if option in user_active_options.get(chat_id, set()) else " 🔴"
-        markup.add(KeyboardButton(f"{option} {status}"))
-    markup.add(KeyboardButton("💉Start Inject💉"))
+    for label, callback_data in options:
+        markup.add(InlineKeyboardButton(label, callback_data=callback_data))
+    
+    # Add a start inject button
+    markup.add(InlineKeyboardButton("💉 Start Inject 💉", callback_data="start_inject"))
 
-    # Send the keyboard to the user
+    # Send message with inline keyboard
     bot.send_message(chat_id, "Pilih setting untuk inject:", reply_markup=markup)
-    bot.register_next_step_handler_by_chat_id(chat_id, inject_handler)
 
-def inject_handler(message):
-    user_id = message.chat.id
-    selected_option = message.text.rstrip(" 🟢🔴")  # Extract the option without the status symbol
+# Handle callback queries from inline buttons
+@bot.callback_query_handler(func=lambda call: True)
+def callback_query_handler(call):
+    user_id = call.message.chat.id
+    selected_option = call.data
 
-    if selected_option == "💉Start Inject💉":
+    if selected_option == "start_inject":
         # Send loading GIF before starting injection
         with open("loading.gif", "rb") as gif:
             bot.send_animation(user_id, gif)
@@ -115,18 +119,38 @@ def inject_handler(message):
         # Start the injection process
         bot.send_message(user_id, "💉 Start Injecting...")
         time.sleep(3)  # Simulate injection delay
-        bot.send_message(user_id, "Successfully completed the injection... Wish you all the best dan semoga kemenangan milik anda. ✨")
+        bot.send_message(user_id, "Injection completed! Semoga kemenangan milik anda. ✨")
     else:
-        # Toggle the activation status of the selected option
+        # Toggle option status
         if selected_option in user_active_options.get(user_id, set()):
             user_active_options[user_id].remove(selected_option)
-            bot.send_message(user_id, f"{selected_option} dinyahaktifkan.")
+            bot.answer_callback_query(call.id, f"{selected_option.replace('_', ' ').title()} dinyahaktifkan.")
         else:
             user_active_options.setdefault(user_id, set()).add(selected_option)
-            bot.send_message(user_id, f"{selected_option} diaktifkan.")
+            bot.answer_callback_query(call.id, f"{selected_option.replace('_', ' ').title()} diaktifkan.")
 
-        # Resend updated keyboard with status indicators
-        send_option_keyboard(user_id)
+        # Update the inline keyboard
+        bot.edit_message_reply_markup(
+            chat_id=user_id,
+            message_id=call.message.message_id,
+            reply_markup=get_updated_inline_keyboard(user_id)
+        )
+
+# Function to dynamically update inline keyboard with status
+def get_updated_inline_keyboard(chat_id):
+    markup = InlineKeyboardMarkup(row_width=2)
+    options = [
+        ("INJECTOR PECAH 3", "injector_pecah_3"),
+        ("SEAWORLD BIGWIN INJECTOR", "seaworld_bigwin"),
+        ("DETECTOR FREESPIN", "detector_freespin"),
+        ("WINRATE 99%", "winrate_99"),
+        ("MEGA ULTRA BIGWIN INJECTOR", "mega_ultra_bigwin"),
+    ]
+    for label, callback_data in options:
+        status = "🟢" if callback_data in user_active_options.get(chat_id, set()) else "🔴"
+        markup.add(InlineKeyboardButton(f"{label} {status}", callback_data=callback_data))
+    markup.add(InlineKeyboardButton("💉 Start Inject 💉", callback_data="start_inject"))
+    return markup
 
 # Command: /help
 @bot.message_handler(commands=['help'])
