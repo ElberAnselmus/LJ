@@ -125,8 +125,10 @@ def get_game_id(message):
 # def send_winrate(message):
 #     winrate_message = "📊 *Winrate Scanning Result* 📊\n\n"
 
-#     # Get current date and time
-#     current_date = datetime.datetime.now().strftime("%d-%m-%Y | %H:%M")
+
+# Get user's current time based on device (assume UTC+8 for this example)
+#     user_timezone = datetime.timezone(datetime.timedelta(hours=8))  # Replace 8 with the required UTC offset
+#     current_date = datetime.datetime.now(user_timezone).strftime("%d-%m-%Y | %H:%M")
 #     winrate_message += f"📅 Date: {current_date}\n\n"
 
 #     winrate_message +=  "🎮 Here is the winrate for the selected game 🎮\n\n"
@@ -142,14 +144,16 @@ def get_game_id(message):
 
 # KHAS UNTUK SET WINRATE SATU GAME PALING BESAR =============================================================================
 # # Generate and send winrate message
+# Generate and send winrate message
 def send_winrate(message):
     winrate_message = "📊 *Winrate Scanning Result* 📊\n\n"
 
-    # Get current date and time
-    current_date = datetime.datetime.now().strftime("%d-%m-%Y | %H:%M")
+    # Get user's current time based on device (assume UTC+8 for this example)
+    user_timezone = datetime.timezone(datetime.timedelta(hours=8))  # Replace 8 with the required UTC offset
+    current_date = datetime.datetime.now(user_timezone).strftime("%d-%m-%Y | %H:%M")
     winrate_message += f"📅 Date: {current_date}\n\n"
 
-    winrate_message +=  "🎮 Here is the winrate for the selected game 🎮\n\n"
+    winrate_message += "🎮 Here is the winrate for the selected game 🎮\n\n"
 
     for game in games:
         if game.lower() == "iceland":
