@@ -6,6 +6,7 @@ import random
 import sqlite3
 from queue import Queue
 import threading
+import datetime
 
 # Load config
 config = configparser.ConfigParser()
@@ -88,8 +89,8 @@ def start_handler(message):
         # Update latest_inject timestamp for existing user
         update_latest_inject(user_id)
 
-    # Prompt user to input the special code
-    bot.send_message(message.chat.id, "💎 Selamat datang! Sila masukkan Special Code untuk verify.")
+    # Prompt user to input the activation code
+    bot.send_message(message.chat.id, "💎 Selamat datang! Sila masukkan Activation Code untuk verify.")
     bot.register_next_step_handler(message, verify_code)
 
 def verify_code(message):
@@ -110,31 +111,67 @@ def get_game_id(message):
     user_id = message.chat.id
     game_id = message.text  # Store user-provided game ID
 
-    bot.send_message(message.chat.id, "👾 Bot sedang scan winrate, sila tunggu sebentar...")
-    time.sleep(20)  # Simulate injection delay
-    request_queue.put((send_winrate, message))
+    # Validate the game ID input
+    if any(char.isalpha() for char in game_id) or len(game_id) < 10:
+        bot.send_message(message.chat.id, "❌ Invalid ID Game. Tolong masukkan ID Game yang valid.")
+        bot.register_next_step_handler(message, get_game_id)  # Prompt for game ID again
+    else:
+        bot.send_message(message.chat.id, "👾 Bot sedang scan winrate, sila tunggu sebentar...")
+        time.sleep(20)  # Simulate injection delay
+        request_queue.put((send_winrate, message))
 
-# Generate and send winrate message
+# KHAS UNTUK SET WINRATE SEMUA GAME ========================================================================================
+# # Generate and send winrate message
+# def send_winrate(message):
+#     winrate_message = "📊 *Winrate Scanning Result* 📊\n\n"
+
+#     # Get current date and time
+#     current_date = datetime.datetime.now().strftime("%d-%m-%Y | %H:%M")
+#     winrate_message += f"📅 Date: {current_date}\n\n"
+
+#     winrate_message +=  "🎮 Here is the winrate for the selected game 🎮\n\n"
+
+#     for game in games:
+#         # Generate random winrate between 40% and 93%
+#         winrate = f"-🤖 {game} - {random.uniform(40.14, 82.94):.2f}%"
+#         winrate_message += f"{winrate}\n"
+
+#     # Send the winrate results
+#     bot.send_message(message.chat.id, winrate_message, parse_mode="Markdown")
+#     send_option_inline_keyboard(message.chat.id)
+
+# KHAS UNTUK SET WINRATE SATU GAME PALING BESAR =============================================================================
+# # Generate and send winrate message
 def send_winrate(message):
     winrate_message = "📊 *Winrate Scanning Result* 📊\n\n"
+
+    # Get current date and time
+    current_date = datetime.datetime.now().strftime("%d-%m-%Y | %H:%M")
+    winrate_message += f"📅 Date: {current_date}\n\n"
+
+    winrate_message +=  "🎮 Here is the winrate for the selected game 🎮\n\n"
+
     for game in games:
-        # Generate random winrate between 40% and 93%
-        winrate = f"-🤖 {game} - {random.randint(40, 93)}%"
+        if game.lower() == "iceland":
+            winrate = f"-🤖 {game} - 91.74%"  # Fixed winrate for "great88"
+        else:
+            winrate = f"-🤖 {game} - {random.uniform(40.14, 78.94):.2f}%"  # Random winrate for other games
         winrate_message += f"{winrate}\n"
 
     # Send the winrate results
     bot.send_message(message.chat.id, winrate_message, parse_mode="Markdown")
     send_option_inline_keyboard(message.chat.id)
 
+
 # Send the main menu with inline buttons
 def send_option_inline_keyboard(chat_id):
     # Create inline keyboard
     markup = InlineKeyboardMarkup(row_width=2)
     options = [
-        ("SEAWORLD BIGWIN 🔴", "seaworld_bigwin"),
-        ("PECAH 3 🔴", "injector_pecah_3"),
-        ("MEGA ULTRA BIGWIN 🔴", "mega_ultra_bigwin"),
-        ("DETECTOR FREESPIN 🔴", "detector_freespin"),
+        ("FreeSpin 🔴", "freespin"),
+        ("Pecah 3 🔴", "injector_pecah_3"),
+        ("Ultra BigWin 🔴", "ultra_bigwin"),
+        ("Winrate 99% 🔴", "winrate_99%"),
     ]
     for i in range(0, len(options), 2):
         row = options[i:i + 2]
@@ -145,7 +182,7 @@ def send_option_inline_keyboard(chat_id):
     markup.add(InlineKeyboardButton("💉 Start Inject 💉", callback_data="start_inject"))
 
     # Send message with inline keyboard
-    bot.send_message(chat_id, "Pilih setting untuk inject:", reply_markup=markup)
+    bot.send_message(chat_id, "⚙️ Pilih setting untuk inject:", reply_markup=markup)
 
 # Handle callback queries from inline buttons
 @bot.callback_query_handler(func=lambda call: True)
@@ -179,10 +216,10 @@ def callback_query_handler(call):
 def get_updated_inline_keyboard(chat_id):
     markup = InlineKeyboardMarkup(row_width=2)
     options = [
-        ("SEAWORLD BIGWIN", "seaworld_bigwin"),
-        ("PECAH 3", "injector_pecah_3"),
-        ("MEGA ULTRA BIGWIN", "mega_ultra_bigwin"),
-        ("DETECTOR FREESPIN", "detector_freespin"),
+        ("FreeSpin", "freespin"),
+        ("Pecah 3", "injector_pecah_3"),
+        ("Ultra BigWin", "ultra_bigwin"),
+        ("Winrate 99%", "winrate_99%"),
     ]
     for i in range(0, len(options), 2):
         row = options[i:i + 2]
@@ -195,8 +232,32 @@ def get_updated_inline_keyboard(chat_id):
 
 # Simulate injection process
 def simulate_injection(user_id):
-    time.sleep(20)  # Simulate injection delay
-    bot.send_message(user_id, "🧧 Injection completed! Semoga kemenangan milik anda. 🧧")
+    # Delay 1: 10-20%
+    message = bot.send_message(user_id, f"⌛ - {random.randint(10, 20)}% Processing Injection...")
+    time.sleep(5)  # Simulate injection delay 1
+
+    # Update message for Delay 2: 33-60%
+    bot.edit_message_text(
+        chat_id=user_id,
+        message_id=message.message_id,
+        text=f"⌛ - {random.randint(33, 60)}% Processing Injection..."
+    )
+    time.sleep(5)  # Simulate injection delay 2
+
+    # Update message for Delay 3: 72-92%
+    bot.edit_message_text(
+        chat_id=user_id,
+        message_id=message.message_id,
+        text=f"⌛ - {random.randint(72, 92)}% Processing Injection..."
+    )
+    time.sleep(10)  # Simulate injection delay 3
+
+    # Final message: Injection completed
+    bot.edit_message_text(
+        chat_id=user_id,
+        message_id=message.message_id,
+        text="🧧 Injection completed! Semoga kemenangan milik anda. 🧧\n\n - Tekan /start untuk ulang injection. \n - Tekan /help untuk info lebih lanjut."
+    )
 
 # Worker thread for processing requests
 def worker():
@@ -218,15 +279,17 @@ def help_handler(message):
         "- Tidak diwajibkan untuk INJECT berulang kali pada masa yang singkat!\n\n"
         "📋 *Cara pemakaian* 📋\n"
         "- Pastikan guna Bot dengan Game dekat satu device sahaja.\n"
-        "- Tunggu untuk bot scan winrate setiap game.\n"
         "- Masukkan ID Game anda.\n"
+        "- Tunggu untuk bot scan winrate setiap game.\n"
         "- Ubah settings yang anda inginkan.\n"
         "- Tekan 'Start Inject' untuk memulakan inject boost akaun.\n"
         "- Buka game tanpa menutup tele/bot anda.\n\n"
-        "🚀 Semoga kemenangan buat anda."
+        "🚀 Semoga kemenangan buat anda.\n\n"
+        "📲 Sebarang pertanyaan sila chat min: @xninze101"
     )
     bot.send_message(message.chat.id, help_message, parse_mode="Markdown")
 
 if __name__ == "__main__":
     print("Bot is running...")
     bot.infinity_polling()
+
